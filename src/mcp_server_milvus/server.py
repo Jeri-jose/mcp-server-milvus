@@ -14,11 +14,17 @@ from pymilvus import (
 
 
 class MilvusConnector:
-    def __init__(self, uri: str, token: Optional[str] = None, db_name: Optional[str] = "default"):
+    def __init__(self,uri: str,token: Optional[str] = None,db_name: Optional[str] = "default",secure: bool = False,server_pem_path: Optional[str] = None,server_name: Optional[str] = None,):
         self.uri = uri
         self.token = token
-        self.client = MilvusClient(uri=uri, token=token, db_name=db_name)
-
+        self.client = MilvusClient(
+            uri=uri,
+            token=token,
+            db_name=db_name,
+            secure=secure,
+            server_pem_path=server_pem_path,
+            server_name=server_name,
+        )
     async def list_collections(self) -> list[str]:
         """List all collections in the database."""
         try:
@@ -796,6 +802,12 @@ def parse_arguments():
         "--milvus-token", type=str, default=None, help="Milvus authentication token"
     )
     parser.add_argument("--milvus-db", type=str, default="default", help="Milvus database name")
+
+    #Secure connection options
+    parser.add_argument("--milvus-secure", action="store_true", help="Use secure (TLS) connection")
+    parser.add_argument("--milvus-cert", type=str, default=None, help="Path to server PEM cert file")
+    parser.add_argument("--milvus-server-name", type=str, default=None, help="Expected server name for TLS cert")
+
     parser.add_argument("--sse", action="store_true", help="Enable SSE mode")
     parser.add_argument("--port", type=int, default=8000, help="Port number for SSE server")
     return parser.parse_args()
@@ -808,6 +820,9 @@ def main():
         "milvus_uri": os.environ.get("MILVUS_URI", args.milvus_uri),
         "milvus_token": os.environ.get("MILVUS_TOKEN", args.milvus_token),
         "db_name": os.environ.get("MILVUS_DB", args.milvus_db),
+        "secure": os.environ.get("MILVUS_SECURE", str(args.milvus_secure)).lower() == "true",
+        "server_pem_path": os.environ.get("MILVUS_CERT", args.milvus_cert),
+        "server_name": os.environ.get("MILVUS_SERVER_NAME", args.milvus_server_name),
     }
     if args.sse:
         mcp.run(transport="sse", port=args.port, host="0.0.0.0")
