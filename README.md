@@ -16,9 +16,17 @@ Before using this MCP server, ensure you have:
 
 ## Usage
 
-The recommended way to use this MCP server is to run it directly with `uv` without installation. This is how both Claude Desktop and Cursor are configured to use it in the examples below.
+### Running with Package Module
 
-If you want to clone the repository:
+The recommended way to use this MCP server is to run it as a Python module with `uv`:
+
+```bash
+uv run python -m mcp_server_milvus --milvus-uri http://localhost:19530
+```
+
+### Running from Source
+
+If you want to clone the repository and run from source:
 
 ```bash
 git clone https://github.com/zilliztech/mcp-server-milvus.git
@@ -31,7 +39,15 @@ Then you can run the server directly:
 uv run src/mcp_server_milvus/server.py --milvus-uri http://localhost:19530
 ```
 
+### Environment Configuration
+
 Alternatively you can change the .env file in the `src/mcp_server_milvus/` directory to set the environment variables and run the server with the following command:
+
+```bash
+uv run python -m mcp_server_milvus
+```
+
+or from source:
 
 ```bash
 uv run src/mcp_server_milvus/server.py
@@ -50,7 +66,7 @@ The server supports two running modes: **stdio** (default) and **SSE** (Server-S
 - Usage:
 
   ```bash
-  uv run src/mcp_server_milvus/server.py --milvus-uri http://localhost:19530
+  uv run python -m mcp_server_milvus --milvus-uri http://localhost:19530
   ```
 
 ### SSE Mode
@@ -60,7 +76,7 @@ The server supports two running modes: **stdio** (default) and **SSE** (Server-S
 - **Usage:**
 
   ```bash
-  uv run src/mcp_server_milvus/server.py --sse --milvus-uri http://localhost:19530 --port 8000
+  uv run python -m mcp_server_milvus --sse --milvus-uri http://localhost:19530 --port 8000
   ```
 
   - `--sse`: Enables SSE mode.
@@ -71,19 +87,74 @@ The server supports two running modes: **stdio** (default) and **SSE** (Server-S
   If you want to debug in SSE mode, after starting the SSE service, enter the following command:
 
   ```bash
-  mcp dev src/mcp_server_milvus/server.py
+  mcp dev -m mcp_server_milvus
   ```
 
   The output will be similar to:
 
   ```plaintext
-  % mcp dev src/mcp_server_milvus/merged_server.py
+  % mcp dev -m mcp_server_milvus
   Starting MCP inspector...
   ⚙️ Proxy server listening on port 6277
   🔍 MCP Inspector is up and running at http://127.0.0.1:6274 🚀
   ```
 
   You can then access the MCP Inspector at `http://127.0.0.1:6274` for testing.
+
+## Secure Milvus Connection
+
+The MCP server supports secure connections to Milvus using TLS encryption. This is essential when connecting to production Milvus instances or cloud-hosted Milvus services.
+
+### Basic Secure Connection
+
+To enable a secure connection, use the `--milvus-secure` flag:
+
+```bash
+uv run python -m mcp_server_milvus --milvus-uri https://your-milvus-server:19530 --milvus-secure
+```
+
+### Advanced TLS Configuration
+
+For more advanced TLS configurations, you can specify additional parameters:
+
+```bash
+uv run python -m mcp_server_milvus \
+  --milvus-uri https://your-milvus-server:19530 \
+  --milvus-secure \
+  --milvus-cert /path/to/server.pem \
+  --milvus-server-name your-server.example.com \
+  --milvus-token your_auth_token
+```
+
+### Security Parameters
+
+- `--milvus-secure`: Enable TLS/SSL encryption for the connection
+- `--milvus-cert`: Path to the server's PEM certificate file for custom CA verification
+- `--milvus-server-name`: Expected server name for TLS certificate validation (useful for custom certificates)
+- `--milvus-token`: Authentication token for secure access
+
+### Cloud Provider Examples
+
+#### Zilliz Cloud
+
+```bash
+uv run python -m mcp_server_milvus \
+  --milvus-uri https://your-cluster.api.gcp-us-west1.zillizcloud.com:443 \
+  --milvus-secure \
+  --milvus-token your_api_key
+```
+
+#### Self-hosted with Custom Certificates
+
+```bash
+uv run python -m mcp_server_milvus \
+  --milvus-uri https://milvus.yourcompany.com:19530 \
+  --milvus-secure \
+  --milvus-cert /etc/ssl/certs/milvus-ca.pem \
+  --milvus-server-name milvus.yourcompany.com \
+  --milvus-token your_secure_token
+```
+
 
 ## Supported Applications
 
@@ -120,14 +191,9 @@ Follow these steps to configure Claude Desktop for SSE mode:
 
 4. Restart Claude Desktop to apply the changes.
 
-#### Stdio Mode Configuration
+#### Stdio Mode Configuration with Security
 
-For stdio mode, follow these steps:
-
-1. Install Claude Desktop from https://claude.ai/download.
-2. Open your Claude Desktop configuration file:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-3. Add the following configuration for stdio mode:
+For secure connections with stdio mode:
 
 ```json
 {
@@ -135,19 +201,47 @@ For stdio mode, follow these steps:
     "milvus": {
       "command": "/PATH/TO/uv",
       "args": [
-        "--directory",
-        "/path/to/mcp-server-milvus/src/mcp_server_milvus",
         "run",
-        "server.py",
+        "python",
+        "-m",
+        "mcp_server_milvus",
         "--milvus-uri",
-        "http://localhost:19530"
+        "https://your-secure-milvus:19530",
+        "--milvus-secure",
+        "--milvus-token",
+        "your_auth_token"
       ]
     }
   }
 }
 ```
 
-4. Restart Claude Desktop to apply the changes.
+For production environments with custom certificates:
+
+```json
+{
+  "mcpServers": {
+    "milvus": {
+      "command": "/PATH/TO/uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "mcp_server_milvus",
+        "--milvus-uri",
+        "https://milvus.yourcompany.com:19530",
+        "--milvus-secure",
+        "--milvus-cert",
+        "/path/to/milvus-ca.pem",
+        "--milvus-server-name",
+        "milvus.yourcompany.com",
+        "--milvus-token",
+        "your_secure_token"
+      ]
+    }
+  }
+}
+```
 
 ## Usage with Cursor
 
@@ -157,13 +251,13 @@ For stdio mode, follow these steps:
 
 1. Open `Cursor Settings` > `MCP`
 2. Click on `Add new global MCP server`
-3. After clicking, it will automatically redirect you to the `mcp.json` file, which will be created if it doesn’t exist
+3. After clicking, it will automatically redirect you to the `mcp.json` file, which will be created if it doesn't exist
 
 ### Configuring the `mcp.json` File
 
 #### For Stdio Mode:
 
-Overwrite the `mcp.json` file with the following content:
+##### Basic Configuration:
 
 ```json
 {
@@ -171,12 +265,35 @@ Overwrite the `mcp.json` file with the following content:
     "milvus": {
       "command": "/PATH/TO/uv",
       "args": [
-        "--directory",
-        "/path/to/mcp-server-milvus/src/mcp_server_milvus",
         "run",
-        "server.py",
+        "python",
+        "-m",
+        "mcp_server_milvus",
         "--milvus-uri",
         "http://127.0.0.1:19530"
+      ]
+    }
+  }
+}
+```
+
+##### Secure Connection Configuration:
+
+```json
+{
+  "mcpServers": {
+    "milvus": {
+      "command": "/PATH/TO/uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "mcp_server_milvus",
+        "--milvus-uri",
+        "https://your-secure-milvus:19530",
+        "--milvus-secure",
+        "--milvus-token",
+        "your_auth_token"
       ]
     }
   }
@@ -187,11 +304,17 @@ Overwrite the `mcp.json` file with the following content:
 
 1. Start the service by running the following command:
 
+   **Basic SSE Mode:**
    ```bash
-   uv run src/mcp_server_milvus/server.py --sse --milvus-uri http://your_sse_host --port port
+   uv run python -m mcp_server_milvus --sse --milvus-uri http://your_sse_host --port port
    ```
 
-   > **Note**: Replace `http://your_sse_host` with your actual SSE host address and `port` with the specific port number you’re using.
+   **Secure SSE Mode:**
+   ```bash
+   uv run python -m mcp_server_milvus --sse --milvus-uri https://your_secure_host:19530 --milvus-secure --milvus-token your_token --port port
+   ```
+
+   > **Note**: Replace `http://your_sse_host` or `https://your_secure_host` with your actual host address and `port` with the specific port number you're using.
 
 2. Once the service is up and running, overwrite the `mcp.json` file with the following content:
 
@@ -300,16 +423,21 @@ The server provides the following tools:
 
 ## Environment Variables
 
+You can use environment variables instead of command-line arguments:
+
 - `MILVUS_URI`: Milvus server URI (can be set instead of --milvus-uri)
-- `MILVUS_TOKEN`: Optional authentication token
-- `MILVUS_DB`: Database name (defaults to "default")
+- `MILVUS_TOKEN`: Authentication token (can be set instead of --milvus-token)  
+- `MILVUS_DB`: Database name (can be set instead of --milvus-db, defaults to "default")
+- `MILVUS_SECURE`: Set to "true" to enable secure connection (can be set instead of --milvus-secure)
+- `MILVUS_CERT`: Path to server PEM cert file (can be set instead of --milvus-cert)
+- `MILVUS_SERVER_NAME`: Expected server name for TLS cert (can be set instead of --milvus-server-name)
 
 ## Development
 
 To run the server directly:
 
 ```bash
-uv run server.py --milvus-uri http://localhost:19530
+uv run python -m mcp_server_milvus --milvus-uri http://localhost:19530
 ```
 
 ## Examples
@@ -384,10 +512,20 @@ Collection 'articles' has been created successfully with the following schema:
 
 If you see errors like "Failed to connect to Milvus server":
 
-1. Verify your Milvus instance is running: `docker ps` (if using Docker)
-2. Check the URI is correct in your configuration
-3. Ensure there are no firewall rules blocking the connection
-4. Try using `127.0.0.1` instead of `localhost` in the URI
+1. **Basic connectivity**: Verify your Milvus instance is running: `docker ps` (if using Docker)
+2. **URI format**: Check the URI format is correct in your configuration
+3. **Network access**: Ensure there are no firewall rules blocking the connection
+4. **Address resolution**: Try using `127.0.0.1` instead of `localhost` in the URI
+5. **Secure connections**: If using `--milvus-secure`, ensure your Milvus instance supports TLS
+
+#### TLS/SSL Issues
+
+If you see TLS or SSL-related errors:
+
+1. **Certificate validation**: Verify the server certificate is valid and trusted
+2. **Custom certificates**: If using `--milvus-cert`, ensure the certificate file path is correct and readable
+3. **Server name mismatch**: Use `--milvus-server-name` if the certificate's common name doesn't match the URI hostname
+4. **Protocol mismatch**: Ensure you're using `https://` in the URI when `--milvus-secure` is enabled
 
 #### Authentication Issues
 

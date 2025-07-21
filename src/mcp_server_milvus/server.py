@@ -17,14 +17,23 @@ class MilvusConnector:
     def __init__(self,uri: str,token: Optional[str] = None,db_name: Optional[str] = "default",secure: bool = False,server_pem_path: Optional[str] = None,server_name: Optional[str] = None,):
         self.uri = uri
         self.token = token
-        self.client = MilvusClient(
-            uri=uri,
-            token=token,
-            db_name=db_name,
-            secure=secure,
-            server_pem_path=server_pem_path,
-            server_name=server_name,
-        )
+        
+        # Only pass secure connection parameters if secure is True and they are provided
+        client_kwargs = {
+            "uri": uri,
+            "token": token,
+            "db_name": db_name,
+        }
+        
+        if secure and server_pem_path:
+            client_kwargs.update({
+                "secure": secure,
+                "server_pem_path": server_pem_path,
+                "server_name": server_name,
+            })
+        
+        self.client = MilvusClient(**client_kwargs)
+        
     async def list_collections(self) -> list[str]:
         """List all collections in the database."""
         try:
@@ -471,7 +480,12 @@ class MilvusConnector:
         """
         try:
             # Create a new client with the specified database
-            self.client = MilvusClient(uri=self.uri, token=self.token, db_name=db_name)
+            client_kwargs = {
+                "uri": self.uri,
+                "token": self.token,
+                "db_name": db_name
+            }
+            self.client = MilvusClient(**client_kwargs)
             return True
         except Exception as e:
             raise ValueError(f"Failed to switch database: {str(e)}")
@@ -487,11 +501,29 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[MilvusContext]:
     """Manage application lifecycle for Milvus connector."""
     config = server.config
 
-    connector = MilvusConnector(
-        uri=config.get("milvus_uri", "http://localhost:19530"),
-        token=config.get("milvus_token"),
-        db_name=config.get("db_name", "default"),
-    )
+    # Get configuration values
+    uri = config.get("milvus_uri", "http://localhost:19530")
+    token = config.get("milvus_token")
+    db_name = config.get("db_name", "default")
+    secure = config.get("secure", False)
+    server_pem_path = config.get("server_pem_path")
+    server_name = config.get("server_name")
+
+    # Only pass secure parameters if secure is True
+    connector_kwargs = {
+        "uri": uri,
+        "token": token,
+        "db_name": db_name,
+    }
+    
+    if secure and server_pem_path:
+        connector_kwargs.update({
+            "secure": secure,
+            "server_pem_path": server_pem_path,
+            "server_name": server_name,
+        })
+
+    connector = MilvusConnector(**connector_kwargs)
 
     try:
         yield MilvusContext(connector)
@@ -816,14 +848,20 @@ def parse_arguments():
 def main():
     load_dotenv()
     args = parse_arguments()
+    
+    # Parse secure flag properly
+    secure_env = os.environ.get("MILVUS_SECURE", str(args.milvus_secure)).lower()
+    secure = secure_env in ("true", "1", "yes", "on")
+    
     mcp.config = {
         "milvus_uri": os.environ.get("MILVUS_URI", args.milvus_uri),
         "milvus_token": os.environ.get("MILVUS_TOKEN", args.milvus_token),
         "db_name": os.environ.get("MILVUS_DB", args.milvus_db),
-        "secure": os.environ.get("MILVUS_SECURE", str(args.milvus_secure)).lower() == "true",
-        "server_pem_path": os.environ.get("MILVUS_CERT", args.milvus_cert),
-        "server_name": os.environ.get("MILVUS_SERVER_NAME", args.milvus_server_name),
+        "secure": secure,
+        "server_pem_path": os.environ.get("MILVUS_CERT", args.milvus_cert) if secure else None,
+        "server_name": os.environ.get("MILVUS_SERVER_NAME", args.milvus_server_name) if secure else None,
     }
+    
     if args.sse:
         mcp.run(transport="sse", port=args.port, host="0.0.0.0")
     else:
